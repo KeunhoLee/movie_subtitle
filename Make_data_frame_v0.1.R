@@ -2,7 +2,7 @@ library('readr')
 library('tidyr')
 library('dplyr')
 library('stringr')
-
+library('lubridate')
 # Declare function --------------------------------------------------------
 make_subtitle_df <- function(movie_name,
                               data_path = str_interp('${getwd()}/data/'),
@@ -15,7 +15,7 @@ make_subtitle_df <- function(movie_name,
   guessed_encoding <- readr::guess_encoding(file_name)
   subtitle_raw <- readLines(file_name, encoding = guessed_encoding$encoding[1] )
   
-  # 공백 제거
+  # 빈자막 제거
   subtitle_raw <- subtitle_raw[subtitle_raw != '']
   
   # 상황설명 분리
@@ -57,6 +57,10 @@ make_subtitle_df <- function(movie_name,
     ungroup %>%
     select(-sub_idx)
   
+  # 불필요한 문자 제거
+  sub_df <- sub_df %>%
+    mutate(script = trimws(gsub('<[^>]*>|[^[:print:]]', '', script), 'both'))
+  
   # 다수의 발화자 컬럼에서 leading - 삭제
   # row 중간에 발화자가 바뀌는 경우 -가 있음
   sub_df <- sub_df %>%
@@ -77,9 +81,9 @@ make_subtitle_df <- function(movie_name,
   
   # 원본 script 에서 발화자 표기 제거
   sub_df <- sub_df %>%
-    mutate(script = trimws(gsub('\\([^)]*\\)', '',script), 'left'))
+    mutate(script = trimws(gsub('\\([^)]*\\)', '', script), 'both'))
   
-  # script가 NA 것 제거
+  # script가 NA인 것 제거
   sub_df <- sub_df %>%
     filter(!is.na(script))
   
@@ -89,6 +93,10 @@ make_subtitle_df <- function(movie_name,
            time_to = str_sub(timestamp, str_locate(timestamp, ' --> ')[,1] + 5, nchar(timestamp))) %>%
     select(-timestamp)
 
+  sub_df <- sub_df %>%
+    mutate(time_from = gsub(',', '.', time_from),
+           time_to = gsub(',', '.', time_to))
+  
   if(write_file){
     
     if(!dir.exists(result_path)){
@@ -117,11 +125,13 @@ for(mv_name in movie_list ){
 
   tryCatch({
     make_subtitle_df(mv_name,
-                         return_result = FALSE)
+                         return_result = TRUE )#FALSE)
     },
     error = function(e){
       print(str_interp('${mv_name} : ${e}'))
     })
-  
+
 }
+
+
 
